@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Queueing Theory Calculator - M/M/2</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <script>
+    window.MathJax = {
+      tex: {inlineMath: [['\\(','\\)'], ['$', '$']]}
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+
+<body>
+  <main class="container">
+
+    <header class="header-center">
+      <h1 class="title">🧮 Queueing Theory Calculator 🧮</h1>
+    </header>
+
+    <section class="card">
+      <div> <p style="text-align:center;"> Model: M/M/2 (dua pelayan) — rumus standar Erlang-C. Semua input dalam menit. </p> </div>
+
+      <h2>Input Data</h2>
+
+      {% if error %}
+        <div class="alert">{{ error }}</div>
+      {% endif %}
+
+      <form class="form" method="POST" action="/">
+        <input type="hidden" name="tab" id="tabInput" value="{{ active_tab if active_tab else 'perhitungan' }}">
+
+        <div class="grid">
+          <label class="field">
+            <span>Waktu antar kedatangan (menit)</span>
+            <input type="number" name="interarrival" step="0.0001" min="0.0001"
+                   value="{{ interarrival }}" required>
+            <small>Contoh soal: 4 menit/pelanggan</small>
+          </label>
+
+          <label class="field">
+            <span>Waktu pelayanan per pelayan (menit)</span>
+            <input type="number" name="service_time" step="0.0001" min="0.0001"
+                   value="{{ service_time }}" required>
+            <small>Contoh soal: 3 menit/pelanggan</small>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Jumlah pelayan (server)</span>
+          <select name="c" disabled>
+            <option value="2" selected>2 (sesuai instruksi)</option>
+          </select>
+          <small>Untuk tugas ini ditetapkan M/M/2.</small>
+        </label>
+
+        <button class="btn" type="submit">Calculate</button>
+      </form>
+
+      {% if res %}
+        <div class="divider"></div>
+
+        <div class="tabs">
+          <button type="button" class="tab-btn" id="btn-perhitungan" onclick="showTab('perhitungan')">
+            Hasil Perhitungan
+          </button>
+          <button type="button" class="tab-btn" id="btn-ringkasan" onclick="showTab('ringkasan')">
+            Hasil (M/M/2)
+          </button>
+        </div>
+
+        <div id="tab-perhitungan" class="tab-panel">
+          <h2>Hasil Perhitungan</h2>
+
+          <div class="step">
+            <h3>Proses Pengerjaan (Step-by-step)</h3>
+
+            <h4 class="sec">1) Hitung λ dan μ</h4>
+            <div class="math">
+              \[
+                \lambda = \frac{1}{\text{waktu antar kedatangan}}
+              \]
+              \[
+                \lambda = \frac{1}{ {{ "%.6g"|format(interarrival) }} } = {{ "%.6f"|format(res.lambda) }}\ \text{pelanggan/menit}
+              \]
+              \[
+                \mu = \frac{1}{\text{waktu pelayanan per pelayan}}
+              \]
+              \[
+                \mu = \frac{1}{ {{ "%.6g"|format(service_time) }} } = {{ "%.6f"|format(res.mu) }}\ \text{pelanggan/menit}
+              \]
+            </div>
+
+            <h4 class="sec">2) Utilisasi (ρ)</h4>
+            <div class="math">
+              \[
+                \rho = \frac{\lambda}{c\mu}
+              \]
+              \[
+                \rho = \frac{ {{ "%.6f"|format(res.lambda) }} }{ 2 \times {{ "%.6f"|format(res.mu) }} } = {{ "%.6f"|format(res.rho) }}
+              \]
+            </div>
+            <p class="plain">Utilisasi tiap pelayan ≈ <b>{{ "%.2f"|format(res.rho*100) }}%</b></p>
+
+            <h4 class="sec">3) Komponen Erlang-C untuk M/M/2</h4>
+            <div class="math">
+              \[
+                a = \frac{\lambda}{\mu}
+              \]
+              \[
+                a = \frac{ {{ "%.6f"|format(res.lambda) }} }{ {{ "%.6f"|format(res.mu) }} } = {{ "%.6f"|format(res.a) }}
+              \]
+              \[
+                P_0 = \left[\sum_{n=0}^{c-1}\frac{a^n}{n!} + \frac{a^c}{c!}\cdot\frac{1}{1-\rho}\right]^{-1}
+              \]
+              \[
+                P_0 = \left[1 + {{ "%.6f"|format(res.a) }} + \frac{({{ "%.6f"|format(res.a) }})^2}{2!}\cdot\frac{1}{1-{{ "%.6f"|format(res.rho) }}}\right]^{-1}
+              \]
+              \[
+                P_0 = {{ "%.6f"|format(res.P0) }}
+              \]
+
+              \[
+                L_q = P_0\cdot\frac{a^c\cdot\rho}{c!\,(1-\rho)^2}
+              \]
+              \[
+                L_q = {{ "%.6f"|format(res.P0) }}\cdot\frac{({{ "%.6f"|format(res.a) }})^2\cdot {{ "%.6f"|format(res.rho) }}}{2!\cdot(1-{{ "%.6f"|format(res.rho) }})^2}
+              \]
+              \[
+                L_q = {{ "%.6f"|format(res.Lq) }}
+              \]
+
+              \[
+                W_q = \frac{L_q}{\lambda}
+              \]
+              \[
+                W_q = \frac{ {{ "%.6f"|format(res.Lq) }} }{ {{ "%.6f"|format(res.lambda) }} }
+              \]
+              \[
+                W_q = {{ "%.6f"|format(res.Wq) }}\ \text{menit}
+              \]
+
+              \[
+                W = W_q + \frac{1}{\mu}
+              \]
+              \[
+                W = {{ "%.6f"|format(res.Wq) }} + \frac{1}{ {{ "%.6f"|format(res.mu) }} }
+              \]
+              \[
+                W = {{ "%.6f"|format(res.W) }}\ \text{menit}
+              \]
+            </div>
+          </div>
+
+          <div class="note">
+            Catatan: Jika Bagian 1 (manual) memakai rumus Erlang-C yang sama, maka hasil manual dan aplikasi akan <b>identik</b>
+            (beda hanya dari pembulatan).
+          </div>
+        </div>
+
+        <div id="tab-ringkasan" class="tab-panel">
+          <h2>Hasil (M/M/2)</h2>
+
+          <div class="metrics">
+            <div class="metric">
+              <span>λ (arrival rate)</span>
+              <b>{{ "%.6f"|format(res.lambda) }}</b>
+              <small>/ menit</small>
+            </div>
+
+            <div class="metric">
+              <span>μ (service rate)</span>
+              <b>{{ "%.6f"|format(res.mu) }}</b>
+              <small>/ menit</small>
+            </div>
+
+            <div class="metric">
+              <span>ρ (utilization)</span>
+              <b>{{ "%.6f"|format(res.rho) }}</b>
+              <small>{{ "%.2f"|format(res.rho*100) }}%</small>
+            </div>
+
+            <div class="metric">
+              <span>W (time in system)</span>
+              <b>{{ "%.6f"|format(res.W) }}</b>
+              <small>menit</small>
+            </div>
+
+            <div class="metric">
+              <span>Wq (time in queue)</span>
+              <b>{{ "%.6f"|format(res.Wq) }}</b>
+              <small>menit</small>
+            </div>
+
+            <div class="metric">
+              <span>Lq (avg queue length)</span>
+              <b>{{ "%.6f"|format(res.Lq) }}</b>
+              <small>pelanggan</small>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          const defaultTab = "{{ active_tab if active_tab else 'perhitungan' }}";
+
+          function showTab(which) {
+            const p1 = document.getElementById("tab-perhitungan");
+            const p2 = document.getElementById("tab-ringkasan");
+            const b1 = document.getElementById("btn-perhitungan");
+            const b2 = document.getElementById("btn-ringkasan");
+            const tabInput = document.getElementById("tabInput");
+
+            if (which === "ringkasan") {
+              p1.style.display = "none";
+              p2.style.display = "block";
+              b1.classList.remove("active");
+              b2.classList.add("active");
+              tabInput.value = "ringkasan";
+            } else {
+              p1.style.display = "block";
+              p2.style.display = "none";
+              b1.classList.add("active");
+              b2.classList.remove("active");
+              tabInput.value = "perhitungan";
+            }
+          }
+
+          showTab(defaultTab);
+        </script>
+      {% endif %}
+    </section>
+
+    <footer class="footer-center">
+      © 2026 | Purnamasari Siregar — M/M/2 Calculator
+    </footer>
+
+  </main>
+</body>
+</html>
