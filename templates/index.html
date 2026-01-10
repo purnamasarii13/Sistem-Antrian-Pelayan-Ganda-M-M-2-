@@ -12,6 +12,9 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <!-- TAMBAHAN: Chart.js untuk grafik -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 
 <body>
@@ -69,6 +72,11 @@
           </button>
           <button type="button" class="tab-btn" id="btn-ringkasan" onclick="showTab('ringkasan')">
             Hasil (M/M/2)
+          </button>
+
+          <!-- TAMBAHAN: tab grafik -->
+          <button type="button" class="tab-btn" id="btn-grafik" onclick="showTab('grafik')">
+            Grafik Simulasi
           </button>
         </div>
 
@@ -203,27 +211,173 @@
           </div>
         </div>
 
+        <!-- TAMBAHAN: panel grafik -->
+        <div id="tab-grafik" class="tab-panel">
+          <h2>Grafik Hasil Simulasi (Variasi λ)</h2>
+          <p class="plain">
+            Grafik dibuat dengan memvariasikan laju kedatangan (λ) dari kecil hingga mendekati kapasitas sistem (≈95% dari 2μ),
+            lalu menghitung Wq dan W memakai rumus Erlang-C.
+          </p>
+
+          <div class="divider"></div>
+
+          <h3>1) Wq terhadap λ</h3>
+          <canvas id="chartWq" height="120"></canvas>
+
+          <div class="divider"></div>
+
+          <h3>2) W terhadap λ</h3>
+          <canvas id="chartW" height="120"></canvas>
+
+          <div class="divider"></div>
+
+          <small class="plain">
+            Catatan: ketika λ mendekati kapasitas (ρ → 1), nilai Wq biasanya naik tajam.
+          </small>
+        </div>
+
         <script>
           const defaultTab = "{{ active_tab if active_tab else 'perhitungan' }}";
+
+          // TAMBAHAN: state grafik supaya tidak render berulang
+          let chartsRendered = false;
+          let chartWqObj = null;
+          let chartWObj = null;
+
+          async function renderChartsIfNeeded() {
+            if (chartsRendered) return;
+
+            // pastikan Chart.js sudah kebaca
+            if (typeof Chart === "undefined") {
+              console.error("Chart.js belum termuat.");
+              return;
+            }
+
+            const serviceTime = "{{ service_time }}";
+            const c = "{{ c }}";
+
+            const url = `/simulate?service_time=${encodeURIComponent(serviceTime)}&c=${encodeURIComponent(c)}&points=30`;
+
+            try {
+              const resp = await fetch(url);
+              const payload = await resp.json();
+
+              if (!resp.ok) {
+                throw new Error(payload.error || "Gagal mengambil data simulasi.");
+              }
+
+              const pts = payload.data || [];
+              const xs = pts.map(p => p.lambda);
+              const wq = pts.map(p => p.Wq);
+              const w = pts.map(p => p.W);
+
+              const ctxWq = document.getElementById("chartWq");
+              const ctxW = document.getElementById("chartW");
+
+              // destroy jika pernah dibuat (jaga-jaga)
+              if (chartWqObj) chartWqObj.destroy();
+              if (chartWObj) chartWObj.destroy();
+
+              chartWqObj = new Chart(ctxWq, {
+                type: "line",
+                data: {
+                  labels: xs,
+                  datasets: [{
+                    label: "Wq (menit)",
+                    data: wq,
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.2
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  plugins: {
+                    legend: { display: true }
+                  },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "λ (pelanggan/menit)" }
+                    },
+                    y: {
+                      title: { display: true, text: "Wq (menit)" },
+                      beginAtZero: true
+                    }
+                  }
+                }
+              });
+
+              chartWObj = new Chart(ctxW, {
+                type: "line",
+                data: {
+                  labels: xs,
+                  datasets: [{
+                    label: "W (menit)",
+                    data: w,
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.2
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  plugins: {
+                    legend: { display: true }
+                  },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "λ (pelanggan/menit)" }
+                    },
+                    y: {
+                      title: { display: true, text: "W (menit)" },
+                      beginAtZero: true
+                    }
+                  }
+                }
+              });
+
+              chartsRendered = true;
+            } catch (err) {
+              console.error(err);
+              const panel = document.getElementById("tab-grafik");
+              if (panel) {
+                panel.insertAdjacentHTML("beforeend", `<div class="alert">${err.message}</div>`);
+              }
+            }
+          }
 
           function showTab(which) {
             const p1 = document.getElementById("tab-perhitungan");
             const p2 = document.getElementById("tab-ringkasan");
+            const p3 = document.getElementById("tab-grafik"); // <-- tambah
             const b1 = document.getElementById("btn-perhitungan");
             const b2 = document.getElementById("btn-ringkasan");
+            const b3 = document.getElementById("btn-grafik"); // <-- tambah
             const tabInput = document.getElementById("tabInput");
 
+            // reset display
+            if (p1) p1.style.display = "none";
+            if (p2) p2.style.display = "none";
+            if (p3) p3.style.display = "none";
+
+            b1.classList.remove("active");
+            b2.classList.remove("active");
+            b3.classList.remove("active");
+
             if (which === "ringkasan") {
-              p1.style.display = "none";
               p2.style.display = "block";
-              b1.classList.remove("active");
               b2.classList.add("active");
               tabInput.value = "ringkasan";
+            } else if (which === "grafik") {
+              p3.style.display = "block";
+              b3.classList.add("active");
+              tabInput.value = "grafik";
+
+              // TAMBAHAN: render grafik saat tab grafik dibuka
+              renderChartsIfNeeded();
             } else {
               p1.style.display = "block";
-              p2.style.display = "none";
               b1.classList.add("active");
-              b2.classList.remove("active");
               tabInput.value = "perhitungan";
             }
           }
