@@ -1,5 +1,5 @@
 import math
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify  # <-- tambah jsonify
 
 app = Flask(__name__)
 
@@ -49,6 +49,53 @@ def mmc_erlang_c(interarrival_min: float, service_min: float, c: int = 2):
         "sum_terms": sum_terms,
         "last_term": last_term,
     }
+
+# -----------------------------
+# TAMBAHAN: endpoint simulasi untuk grafik (tanpa mengubah kode lain)
+# -----------------------------
+@app.route("/simulate", methods=["GET"])
+def simulate():
+    """
+    Menghasilkan data simulasi untuk grafik:
+    memvariasikan lambda dari kecil sampai mendekati kapasitas (0.95 * c * mu).
+    Return: JSON list titik (lambda, rho, Wq, W, Lq)
+    """
+    try:
+        # ambil parameter dari query string
+        service_time = float(request.args.get("service_time", "3.0"))
+        c = int(request.args.get("c", "2"))
+        points = int(request.args.get("points", "25"))
+
+        if service_time <= 0 or c <= 0 or points < 2:
+            return jsonify({"error": "Parameter tidak valid."}), 400
+
+        mu = 1.0 / service_time
+        lam_max = 0.95 * c * mu  # mendekati kapasitas tapi tetap stabil
+        lam_min = max(0.02 * lam_max, 1e-6)  # jangan nol
+
+        data = []
+        for i in range(points):
+            lam = lam_min + (lam_max - lam_min) * (i / (points - 1))
+            interarrival = 1.0 / lam
+            r = mmc_erlang_c(interarrival, service_time, c=c)
+
+            data.append({
+                "lambda": r["lambda"],
+                "rho": r["rho"],
+                "Wq": r["Wq"],
+                "W": r["W"],
+                "Lq": r["Lq"],
+            })
+
+        return jsonify({
+            "service_time": service_time,
+            "c": c,
+            "points": points,
+            "data": data
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route("/", methods=["GET", "POST"])
